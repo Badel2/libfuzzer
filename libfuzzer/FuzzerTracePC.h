@@ -326,7 +326,16 @@ class TracePC {
     assert(j.at("ModulePCTable").size() == NumPCTables);
     for (size_t i = 0; i < NumPCTables; i++) {
       json jM = j.at("ModulePCTable")[i];
-      Modules[i].from_json(jM);
+      assert(jM.size() == ModulePCTable[i].Stop - ModulePCTable[i].Start);
+      size_t j = 0;
+      // TODO: not sure if it is possible to initialize ModulePCTable like this.
+      // If it doesn't work, check if maybe it does not need to be serialized because
+      // it is loaded before reading corpus or something.
+      for (auto it = (PCTableEntry*) ModulePCTable[i].Start; it < ModulePCTable[i].Stop; it++) {
+        const json& jMj = jM[j];
+        it->from_json(jM[j]);
+        j++;
+      }
     }
 
     Set<uintptr_t> ObservedPCsAsIndexes {};
