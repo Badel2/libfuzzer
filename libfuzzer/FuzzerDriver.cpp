@@ -946,21 +946,28 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   }
 
   if (Flags.wait_for_corpus_file && Flags.write_corpus_file) {
-      Printf("ERROR: flags wait_for_corpus_file and write_corpus_file are exclusive\n");
-      return 1;
+      if (Flags.wait_for_corpus_file != Flags.write_corpus_file) {
+          Printf("Error: corpus file must be the same for wait_for_corpus_file and write_corpus_file arguments\n");
+          return 1;
+      }
   }
   std::string InitedCorpusJsonPath ("");
-  bool writeCorpusJson = false;
   if (Flags.wait_for_corpus_file) {
     InitedCorpusJsonPath = Flags.wait_for_corpus_file;
   }
   if (Flags.write_corpus_file) {
     InitedCorpusJsonPath = Flags.write_corpus_file;
-    writeCorpusJson = true;
   }
 
   auto CorporaFiles = ReadCorpora(*Inputs, ParseSeedInuts(Flags.seed_inputs));
-  F->Loop(CorporaFiles, InitedCorpusJsonPath, writeCorpusJson);
+  FuzzInitCorpusMode InitMode {
+    .ReadCorpusJson = Flags.wait_for_corpus_file ? true : false,
+    .WriteCorpusJson = Flags.write_corpus_file ? true : false,
+    .CorpusJsonPath = InitedCorpusJsonPath,
+    .CorporaFiles = CorporaFiles,
+  };
+
+  F->Loop(InitMode);
 
   if (Flags.verbosity)
     Printf("Done %zd runs in %zd second(s)\n", F->getTotalNumberOfRuns(),

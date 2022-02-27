@@ -29,14 +29,25 @@ namespace fuzzer {
 
 using namespace std::chrono;
 
+// Read=0 Write=0: old behavior, execute corpus files
+// Read=0 Write=1: old behavior, and save to file
+// Read=1 Write=0: do not execute, wait for file
+// Read=1 Write=1: do not execute, wait for file, reload corpus, and save to file
+struct FuzzInitCorpusMode {
+  bool ReadCorpusJson;
+  bool WriteCorpusJson;
+  std::string CorpusJsonPath;
+  Vector<SizedFile> CorporaFiles;
+};
+
 class Fuzzer {
 public:
 
   Fuzzer(UserCallback CB, InputCorpus &Corpus, MutationDispatcher &MD,
          FuzzingOptions Options);
   ~Fuzzer();
-  void Loop(Vector<SizedFile> &CorporaFiles, std::string InitedCorpusJsonPath, bool writeCorpusJson);
-  void ReadAndExecuteSeedCorpora(Vector<SizedFile> &CorporaFiles, std::string InitedCorpusJsonPath, bool writeCorpusJson);
+  void Loop(FuzzInitCorpusMode InitMode);
+  void ReadAndExecuteSeedCorpora(FuzzInitCorpusMode InitMode);
 
   void MinimizeCrashLoop(const Unit &U);
   void RereadOutputCorpus(size_t MaxSize);
@@ -113,6 +124,7 @@ private:
   static void StaticDeathCallback();
   void DumpCurrentUnit(const char *Prefix);
   void DeathCallback();
+  void Serialize(std::string Path);
 
   void AllocateCurrentUnitData();
   uint8_t *CurrentUnitData = nullptr;

@@ -794,11 +794,14 @@ void Fuzzer::PurgeAllocator() {
   LastAllocatorPurgeAttemptTime = system_clock::now();
 }
 
-void Fuzzer::ReadAndExecuteSeedCorpora(Vector<SizedFile> &CorporaFiles, std::string InitedCorpusJsonPath, bool writeCorpusJson) {
+void Fuzzer::ReadAndExecuteSeedCorpora(FuzzInitCorpusMode InitMode) {
   const size_t kMaxSaneLen = 1 << 20;
   const size_t kMinDefaultLen = 4096;
 
-  if (writeCorpusJson == false && !InitedCorpusJsonPath.empty()) {
+  Vector<SizedFile> CorporaFiles = InitMode.CorporaFiles;
+  std::string InitedCorpusJsonPath = InitMode.CorpusJsonPath;
+
+  if (InitMode.ReadCorpusJson && !InitedCorpusJsonPath.empty()) {
     Printf("INFO: Loading initiliazed corpus from JSON file\n");
     std::string js;
     while (true) {
@@ -830,6 +833,13 @@ void Fuzzer::ReadAndExecuteSeedCorpora(Vector<SizedFile> &CorporaFiles, std::str
     // Call RunOne once, just in case there is something that needs initialization
     Unit U({'\n'}); // Valid ASCII input.
     RunOne(U.data(), U.size());
+
+    if (InitMode.WriteCorpusJson) {
+      // Reload corpus and serialize again
+      RereadOutputCorpus(MaxInputLen);
+      Serialize(InitedCorpusJsonPath);
+      Printf("INFO: Successfully serialized corpus to file: %s\n", InitedCorpusJsonPath.c_str());
+    }
   } else {
       size_t MaxSize = 0;
       size_t MinSize = -1;
@@ -876,31 +886,9 @@ void Fuzzer::ReadAndExecuteSeedCorpora(Vector<SizedFile> &CorporaFiles, std::str
         }
       }
 
-      if (writeCorpusJson) {
-          // Save Corpus and TPC to file
-          json j;
-          json jCorpus;
-          Corpus.to_json(jCorpus);
-          j["Corpus"] = jCorpus;
-          json jTPC;
-          TPC.to_json(jTPC);
-          j["TPC"] = jTPC;
-/*
-          json jCorporaFiles = json::array();
-          for (auto &SF : CorporaFiles) {
-            json jSF;
-            SF.to_json(jSF);
-            jCorporaFiles.push_back(jSF);
-          }
-          j["CorporaFiles"] = jCorporaFiles;
-*/
-          j["TotalNumberOfRuns"] = TotalNumberOfRuns;
-          j["MaxInputLen"] = MaxInputLen;
-          j["EpochOfLastReadOfOutputCorpus"] = EpochOfLastReadOfOutputCorpus;
-
-          // TODO: save some metadata such as current executable hash, to know when the corpus is valid
-          // TODO: this write must be atomic: it must be impossible for another process to access a partially written file
-          WriteToFile(j.dump(), InitedCorpusJsonPath);
+      if (InitMode.WriteCorpusJson) {
+        Serialize(InitedCorpusJsonPath);
+        Printf("INFO: Successfully serialized corpus to file: %s\n", InitedCorpusJsonPath.c_str());
       }
   }
 
@@ -928,7 +916,36 @@ void Fuzzer::ReadAndExecuteSeedCorpora(Vector<SizedFile> &CorporaFiles, std::str
   }
 }
 
-void Fuzzer::Loop(Vector<SizedFile> &CorporaFiles, std::string InitedCorpusJsonPath, bool writeCorpusJson) {
+void Fuzzer::Serialize(std::string Path) {
+  // Save Corpus and TPC to file
+  json j;
+  json jCorpus;
+  Corpus.to_json(jCorpus);
+  j["Corpus"] = jCorpus;
+  json jTPC;
+  TPC.to_json(jTPC);
+  j["TPC"] = jTPC;
+/*
+  json jCorporaFiles = json::array();
+  for (auto &SF : CorporaFiles) {
+    json jSF;
+    SF.to_json(jSF);
+    jCorporaFiles.push_back(jSF);
+  }
+  j["CorporaFiles"] = jCorporaFiles;
+*/
+  j["TotalNumberOfRuns"] = TotalNumberOfRuns;
+  j["MaxInputLen"] = MaxInputLen;
+  j["EpochOfLastReadOfOutputCorpus"] = EpochOfLastReadOfOutputCorpus;
+
+  // TODO: save some metadata such as current executable hash, to know when the corpus is valid
+  // TODO: this write must be atomic: it must be impossible for another process to access a partially written file
+  WriteToFile(j.dump(), Path);
+}
+
+void Fuzzer::Loop(FuzzInitCorpusMode InitMode) {
+  Vector<SizedFile> &CorporaFiles = InitMode.CorporaFiles;
+  std::string InitedCorpusJsonPath = InitMode.CorpusJsonPath;
   // TODO: probably it would be better to read CorporaFiles from the JSON file
   auto FocusFunctionOrAuto = Options.FocusFunction;
   DFT.Init(Options.DataFlowTrace, &FocusFunctionOrAuto, CorporaFiles,
@@ -939,7 +956,7 @@ void Fuzzer::Loop(Vector<SizedFile> &CorporaFiles, std::string InitedCorpusJsonP
   //std::string InitedCorpusJsonPath ("");
   bool writeCorpusJson = true;
 */
-  ReadAndExecuteSeedCorpora(CorporaFiles, InitedCorpusJsonPath, writeCorpusJson);
+  ReadAndExecuteSeedCorpora(InitMode);
   DFT.Clear();  // No need for DFT any more.
   TPC.SetPrintNewPCs(Options.PrintNewCovPcs);
   TPC.SetPrintNewFuncs(Options.PrintNewCovFuncs);
