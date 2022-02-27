@@ -825,6 +825,7 @@ void Fuzzer::ReadAndExecuteSeedCorpora(Vector<SizedFile> &CorporaFiles, std::str
     Corpus.from_json(j.at("Corpus"));
     TPC.from_json(j.at("TPC"));
     j.at("TotalNumberOfRuns").get_to(TotalNumberOfRuns);
+    j.at("EpochOfLastReadOfOutputCorpus").get_to(EpochOfLastReadOfOutputCorpus);
 
     // Call RunOne once, just in case there is something that needs initialization
     Unit U({'\n'}); // Valid ASCII input.
@@ -895,6 +896,7 @@ void Fuzzer::ReadAndExecuteSeedCorpora(Vector<SizedFile> &CorporaFiles, std::str
 */
           j["TotalNumberOfRuns"] = TotalNumberOfRuns;
           j["MaxInputLen"] = MaxInputLen;
+          j["EpochOfLastReadOfOutputCorpus"] = EpochOfLastReadOfOutputCorpus;
 
           // TODO: save some metadata such as current executable hash, to know when the corpus is valid
           // TODO: this write must be atomic: it must be impossible for another process to access a partially written file
