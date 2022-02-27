@@ -227,8 +227,9 @@ static void PulseThread() {
   }
 }
 
-static void WorkerThread(const Command &BaseCmd, std::atomic<unsigned> *Counter,
-                         unsigned NumJobs, std::atomic<bool> *HasErrors) {
+static void WorkerThread(const Command &BaseCmd0, std::atomic<unsigned> *Counter,
+                         unsigned NumJobs, std::atomic<bool> *HasErrors, std::atomic<Command*> *newCmd) {
+  Command BaseCmd(BaseCmd0);
   while (true) {
     unsigned C = (*Counter)++;
     if (C >= NumJobs) break;
@@ -247,6 +248,9 @@ static void WorkerThread(const Command &BaseCmd, std::atomic<unsigned> *Counter,
     Printf("================== Job %u exited with exit code %d ============\n",
            C, ExitCode);
     fuzzer::CopyFileToErr(Log);
+    if (newCmd) {
+        BaseCmd = **newCmd;
+    }
   }
 }
 
@@ -283,29 +287,46 @@ std::string CloneArgsWithoutX(const std::vector<std::string> &Args,
   return Cmd;
 }
 
-static int RunInMultipleProcesses(const std::vector<std::string> &Args,
-                                  unsigned NumWorkers, unsigned NumJobs) {
+static int RunInMultipleProcesses(const Vector<std::string> &Args,
+                                  unsigned NumWorkers, unsigned NumJobs, std::string WaitForCorpusFile) {
   std::atomic<unsigned> Counter(0);
   std::atomic<bool> HasErrors(false);
+  std::string CorpusFile("corpus.json");
+  if (!WaitForCorpusFile.empty()) {
+    CorpusFile = WaitForCorpusFile;
+  }
   Command Cmd(Args);
   Cmd.removeFlag("jobs");
   Cmd.removeFlag("workers");
-  // These flags must not exist when called in multiprocess mode, they will be added here
-  Cmd.removeFlag("write_corpus_file");
-  Cmd.removeFlag("wait_for_corpus_file");
-  Cmd.addFlag("write_corpus_file", "corpus.json");
   Vector<std::thread> V;
   std::thread Pulse(PulseThread);
   Pulse.detach();
-
-  V.push_back(std::thread(WorkerThread, std::ref(Cmd), &Counter, NumJobs, &HasErrors));
+  Command Cmd1(Cmd);
   // Only the first worker will read and execute the corpus,
   // the other workers will wait for the corpus.json file
-  Command Cmd1(Cmd);
   Cmd1.removeFlag("write_corpus_file");
-  Cmd1.addFlag("wait_for_corpus_file", "corpus.json");
+  Cmd1.removeFlag("wait_for_corpus_file");
+  Cmd1.addFlag("wait_for_corpus_file", CorpusFile);
+  // Cmd2 is a copy of Cmd1 for worker thread 0, because only the first job of
+  // that thread must write the corpus, the other jobs can safely read the
+  // corpus just like the other threads.
+  std::atomic<Command*> Cmd2(&Cmd1);
+
+  if (WaitForCorpusFile.empty()) {
+      // The first worker should write corpus to file, the rest should wait for it
+      // These flags must not exist when called in multiprocess mode, they will be added here
+      Cmd.removeFlag("write_corpus_file");
+      Cmd.removeFlag("wait_for_corpus_file");
+      Cmd.addFlag("write_corpus_file", CorpusFile);
+      V.push_back(std::thread(WorkerThread, std::ref(Cmd), &Counter, NumJobs, &HasErrors, &Cmd2));
+  } else {
+      // If wait_for_corpus_file flag is already set by the user, this means that all the
+      // processes should wait for the corpus file, and no process should actually create it.
+      // TODO: Let's make sure to document this somewhere.
+      V.push_back(std::thread(WorkerThread, std::ref(Cmd1), &Counter, NumJobs, &HasErrors, nullptr));
+  }
   for (unsigned i = 1; i < NumWorkers; i++) {
-    V.push_back(std::thread(WorkerThread, std::ref(Cmd1), &Counter, NumJobs, &HasErrors));
+    V.push_back(std::thread(WorkerThread, std::ref(Cmd1), &Counter, NumJobs, &HasErrors, nullptr));
   }
   for (auto &T : V)
     T.join();
@@ -683,8 +704,13 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
       Printf("Running %u workers\n", Flags.workers);
   }
 
-  if (Flags.workers > 0 && Flags.jobs > 0)
-    return RunInMultipleProcesses(Args, Flags.workers, Flags.jobs);
+  if (Flags.workers > 0 && Flags.jobs > 0) {
+    std::string WaitForCorpusFile("");
+    if (Flags.wait_for_corpus_file) {
+      WaitForCorpusFile = Flags.wait_for_corpus_file;
+    }
+    return RunInMultipleProcesses(Args, Flags.workers, Flags.jobs, WaitForCorpusFile);
+  }
 
   FuzzingOptions Options;
   Options.Verbosity = Flags.verbosity;

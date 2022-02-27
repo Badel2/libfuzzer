@@ -798,7 +798,7 @@ void Fuzzer::ReadAndExecuteSeedCorpora(Vector<SizedFile> &CorporaFiles, std::str
   const size_t kMaxSaneLen = 1 << 20;
   const size_t kMinDefaultLen = 4096;
 
-  if (!InitedCorpusJsonPath.empty()) {
+  if (writeCorpusJson == false && !InitedCorpusJsonPath.empty()) {
     Printf("INFO: Loading initiliazed corpus from JSON file\n");
     std::string js;
     while (true) {
