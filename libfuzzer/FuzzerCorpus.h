@@ -17,11 +17,14 @@
 #include "FuzzerRandom.h"
 #include "FuzzerSHA1.h"
 #include "FuzzerTracePC.h"
+#include "json.hpp"
 #include <algorithm>
 #include <chrono>
 #include <numeric>
 #include <random>
 #include <unordered_set>
+
+using json = nlohmann::json;
 
 namespace fuzzer {
 
@@ -143,6 +146,80 @@ struct InputInfo {
       FeatureFreqs.insert(Lower, std::pair<uint32_t, uint16_t>(Idx, 1));
     }
   }
+
+  void to_json(json& j) const {
+    /*
+  Unit U;  // The actual input data.
+  std::chrono::microseconds TimeOfUnit;
+  uint8_t Sha1[kSHA1NumBytes];  // Checksum.
+  // Number of features that this input has and no smaller input has.
+  size_t NumFeatures = 0;
+  size_t Tmp = 0; // Used by ValidateFeatureSet.
+  // Stats.
+  size_t NumExecutedMutations = 0;
+  size_t NumSuccessfullMutations = 0;
+  bool NeverReduce = false;
+  bool MayDeleteFile = false;
+  bool Reduced = false;
+  bool HasFocusFunction = false;
+  Vector<uint32_t> UniqFeatureSet;
+  Vector<uint8_t> DataFlowTraceForFocusFunction;
+  // Power schedule.
+  bool NeedsEnergyUpdate = false;
+  double Energy = 0.0;
+  double SumIncidence = 0.0;
+  Vector<std::pair<uint32_t, uint16_t>> FeatureFreqs;
+*/
+    j["U"] = U;
+    j["TimeOfUnit"] = TimeOfUnit.count();
+    j["Sha1"] = json::array();
+    for (size_t i = 0; i < kSHA1NumBytes; i++) {
+      j["Sha1"].push_back(Sha1[i]);
+    }
+
+    j["NumFeatures"] = NumFeatures;
+    j["Tmp"] = Tmp;
+
+    j["NumExecutedMutations"] = NumExecutedMutations;
+    j["NumSuccessfullMutations"] = NumSuccessfullMutations;
+    j["NeverReduce"] = NeverReduce;
+    j["MayDeleteFile"] = MayDeleteFile;
+    j["Reduced"] = Reduced;
+    j["HasFocusFunction"] = HasFocusFunction;
+    j["UniqFeatureSet"] = UniqFeatureSet;
+    j["DataFlowTraceForFocusFunction"] = DataFlowTraceForFocusFunction;
+
+    j["NeedsEnergyUpdate"] = NeedsEnergyUpdate;
+    j["Energy"] = Energy;
+    j["SumIncidence"] = SumIncidence;
+    j["FeatureFreqs"] = FeatureFreqs;
+  }
+
+  void from_json(const json& j) {
+    j.at("U").get_to(U);
+    long int TimeOfUnitUs;
+    j.at("TimeOfUnit").get_to(TimeOfUnitUs);
+    const std::chrono::microseconds int_usec(TimeOfUnitUs);
+    TimeOfUnit = int_usec;
+    assert(j.at("Sha1").size() == kSHA1NumBytes);
+    j.at("Sha1").get_to(Sha1);
+
+    j.at("NumFeatures").get_to(NumFeatures);
+    j.at("Tmp").get_to(Tmp);
+    j.at("NumExecutedMutations").get_to(NumExecutedMutations);
+    j.at("NumSuccessfullMutations").get_to(NumSuccessfullMutations);
+    j.at("NeverReduce").get_to(NeverReduce);
+    j.at("MayDeleteFile").get_to(MayDeleteFile);
+    j.at("Reduced").get_to(Reduced);
+    j.at("HasFocusFunction").get_to(HasFocusFunction);
+    j.at("UniqFeatureSet").get_to(UniqFeatureSet);
+    j.at("DataFlowTraceForFocusFunction").get_to(DataFlowTraceForFocusFunction);
+
+    j.at("NeedsEnergyUpdate").get_to(NeedsEnergyUpdate);
+    j.at("Energy").get_to(Energy);
+    j.at("SumIncidence").get_to(SumIncidence);
+    j.at("FeatureFreqs").get_to(FeatureFreqs);
+  }
 };
 
 struct EntropicOptions {
@@ -150,6 +227,20 @@ struct EntropicOptions {
   size_t NumberOfRarestFeatures;
   size_t FeatureFrequencyThreshold;
   bool ScalePerExecTime;
+
+  void to_json(json& j) const {
+    j["Enabled"] = Enabled;
+    j["NumberOfRarestFeatures"] = NumberOfRarestFeatures;
+    j["FeatureFrequencyThreshold"] = FeatureFrequencyThreshold;
+    j["ScalePerExecTime"] = ScalePerExecTime;
+  }
+
+  void from_json(const json& j) {
+    j.at("Enabled").get_to(Enabled);
+    j.at("NumberOfRarestFeatures").get_to(NumberOfRarestFeatures);
+    j.at("FeatureFrequencyThreshold").get_to(FeatureFrequencyThreshold);
+    j.at("ScalePerExecTime").get_to(ScalePerExecTime);
+  }
 };
 
 class InputCorpus {
@@ -466,6 +557,110 @@ public:
 
   size_t NumFeatures() const { return NumAddedFeatures; }
   size_t NumFeatureUpdates() const { return NumUpdatedFeatures; }
+
+  void to_json(json& j) const {
+/*
+  size_t NumExecutedMutations = 0;
+
+  EntropicOptions Entropic;
+
+  std::piecewise_constant_distribution<double> CorpusDistribution;
+
+  Vector<double> Intervals;
+  Vector<double> Weights;
+
+  std::unordered_set<std::string> Hashes;
+  Vector<InputInfo*> Inputs;
+
+  size_t NumAddedFeatures = 0;
+  size_t NumUpdatedFeatures = 0;
+  uint32_t InputSizesPerFeature[kFeatureSetSize];
+  uint32_t SmallestElementPerFeature[kFeatureSetSize];
+
+  bool DistributionNeedsUpdate = true;
+  uint16_t FreqOfMostAbundantRareFeature = 0;
+  uint16_t GlobalFeatureFreqs[kFeatureSetSize] = {};
+  Vector<uint32_t> RareFeatures;
+
+  std::string OutputCorpus;
+*/
+    j["NumExecutedMutations"] = NumExecutedMutations;
+
+    json jEntropic;
+    Entropic.to_json(jEntropic);
+    j["Entropic"] = jEntropic;
+
+    // Skipping serialization of CorpusDistribution
+    // To deserialize, set DistributionNeedsUpdate=true and call
+    // UpdateCorpusDistribution
+
+    j["Intervals"] = Intervals;
+    j["Weights"] = Weights;
+
+    j["Hashes"] = Hashes;
+    j["Inputs"] = json::array();
+    for (auto II : Inputs) {
+      json j2;
+      II->to_json(j2);
+      j["Inputs"].push_back(j2);
+    }
+
+    j["NumAddedFeatures"] = NumAddedFeatures;
+    j["NumUpdatedFeatures"] = NumUpdatedFeatures;
+    j["InputSizesPerFeature"] = json::array();
+    for (size_t i = 0; i < kFeatureSetSize; i++) {
+      j["InputSizesPerFeature"].push_back(InputSizesPerFeature[i]);
+    }
+    j["SmallestElementPerFeature"] = json::array();
+    for (size_t i = 0; i < kFeatureSetSize; i++) {
+      j["SmallestElementPerFeature"].push_back(SmallestElementPerFeature[i]);
+    }
+
+    j["DistributionNeedsUpdate"] = DistributionNeedsUpdate;
+    j["FreqOfMostAbundantRareFeature"] = FreqOfMostAbundantRareFeature;
+    j["GlobalFeatureFreqs"] = json::array();
+    for (size_t i = 0; i < kFeatureSetSize; i++) {
+      j["GlobalFeatureFreqs"].push_back(GlobalFeatureFreqs[i]);
+    }
+    j["RareFeatures"] = RareFeatures;
+
+    j["OutputCorpus"] = OutputCorpus;
+  }
+
+  void from_json(const json& j) {
+    j.at("NumExecutedMutations").get_to(NumExecutedMutations);
+
+    EntropicOptions ent;
+    ent.from_json(j.at("Entropic"));
+    Entropic = ent;
+
+    j.at("Intervals").get_to(Intervals);
+    j.at("Weights").get_to(Weights);
+
+    j.at("Hashes").get_to(Hashes);
+    assert(Inputs.size() == 0);
+    for (auto it = j.at("Inputs").begin(); it < j.at("Inputs").end(); it++) {
+        Inputs.push_back(new InputInfo());
+        InputInfo &II = *Inputs.back();
+        II.from_json(*it);
+    }
+
+    j.at("NumAddedFeatures").get_to(NumAddedFeatures);
+    j.at("NumUpdatedFeatures").get_to(NumUpdatedFeatures);
+    j.at("InputSizesPerFeature").get_to(InputSizesPerFeature);
+    j.at("SmallestElementPerFeature").get_to(SmallestElementPerFeature);
+
+    j.at("DistributionNeedsUpdate").get_to(DistributionNeedsUpdate);
+    j.at("FreqOfMostAbundantRareFeature").get_to(FreqOfMostAbundantRareFeature);
+    j.at("GlobalFeatureFreqs").get_to(GlobalFeatureFreqs);
+    j.at("RareFeatures").get_to(RareFeatures);
+
+    j.at("OutputCorpus").get_to(OutputCorpus);
+
+    // Hopefully force initialization of CorpusDistribution,
+    // which is currently uninitialized
+    DistributionNeedsUpdate = true;
+  }
 
 private:
 

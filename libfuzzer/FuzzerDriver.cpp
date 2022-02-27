@@ -290,12 +290,23 @@ static int RunInMultipleProcesses(const std::vector<std::string> &Args,
   Command Cmd(Args);
   Cmd.removeFlag("jobs");
   Cmd.removeFlag("workers");
-  std::vector<std::thread> V;
+  // These flags must not exist when called in multiprocess mode, they will be added here
+  Cmd.removeFlag("write_corpus_file");
+  Cmd.removeFlag("wait_for_corpus_file");
+  Cmd.addFlag("write_corpus_file", "corpus.json");
+  Vector<std::thread> V;
   std::thread Pulse(PulseThread);
   Pulse.detach();
-  for (unsigned i = 0; i < NumWorkers; i++)
-    V.push_back(std::thread(WorkerThread, std::ref(Cmd), &Counter, NumJobs,
-                            &HasErrors));
+
+  V.push_back(std::thread(WorkerThread, std::ref(Cmd), &Counter, NumJobs, &HasErrors));
+  // Only the first worker will read and execute the corpus,
+  // the other workers will wait for the corpus.json file
+  Command Cmd1(Cmd);
+  Cmd1.removeFlag("write_corpus_file");
+  Cmd1.addFlag("wait_for_corpus_file", "corpus.json");
+  for (unsigned i = 1; i < NumWorkers; i++) {
+    V.push_back(std::thread(WorkerThread, std::ref(Cmd1), &Counter, NumJobs, &HasErrors));
+  }
   for (auto &T : V)
     T.join();
   return HasErrors ? 1 : 0;
@@ -908,8 +919,22 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
     exit(0);
   }
 
+  if (Flags.wait_for_corpus_file && Flags.write_corpus_file) {
+      Printf("ERROR: flags wait_for_corpus_file and write_corpus_file are exclusive\n");
+      return 1;
+  }
+  std::string InitedCorpusJsonPath ("");
+  bool writeCorpusJson = false;
+  if (Flags.wait_for_corpus_file) {
+    InitedCorpusJsonPath = Flags.wait_for_corpus_file;
+  }
+  if (Flags.write_corpus_file) {
+    InitedCorpusJsonPath = Flags.write_corpus_file;
+    writeCorpusJson = true;
+  }
+
   auto CorporaFiles = ReadCorpora(*Inputs, ParseSeedInuts(Flags.seed_inputs));
-  F->Loop(CorporaFiles);
+  F->Loop(CorporaFiles, InitedCorpusJsonPath, writeCorpusJson);
 
   if (Flags.verbosity)
     Printf("Done %zd runs in %zd second(s)\n", F->getTotalNumberOfRuns(),

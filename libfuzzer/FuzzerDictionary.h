@@ -14,8 +14,12 @@
 #include "FuzzerDefs.h"
 #include "FuzzerIO.h"
 #include "FuzzerUtil.h"
+#include "json.hpp"
+
 #include <algorithm>
 #include <limits>
+
+using json = nlohmann::json;
 
 namespace fuzzer {
 // A simple POD sized array of bytes.
@@ -40,6 +44,24 @@ public:
   static size_t GetMaxSize() { return kMaxSize; }
   const uint8_t *data() const { return Data; }
   uint8_t size() const { return Size; }
+
+  void to_json(json& j) const {
+    j = json::array();
+    for (size_t i = 0; i < size(); i++) {
+      j.push_back(data()[i]);
+    }
+  }
+
+  void from_json(const json& j) {
+    size_t size = j.size();
+    assert(size <= kMaxSize);
+    Size = size;
+    auto p = Data;
+    for (size_t i = 0; i < size; i++) {
+      *p = j[i];
+      p++;
+    }
+  }
 
 private:
   uint8_t Size = 0;

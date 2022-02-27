@@ -35,8 +35,9 @@ public:
   Fuzzer(UserCallback CB, InputCorpus &Corpus, MutationDispatcher &MD,
          FuzzingOptions Options);
   ~Fuzzer();
-  void Loop(std::vector<SizedFile> &CorporaFiles);
-  void ReadAndExecuteSeedCorpora(std::vector<SizedFile> &CorporaFiles);
+  void Loop(Vector<SizedFile> &CorporaFiles, std::string InitedCorpusJsonPath, bool writeCorpusJson);
+  void ReadAndExecuteSeedCorpora(Vector<SizedFile> &CorporaFiles, std::string InitedCorpusJsonPath, bool writeCorpusJson);
+
   void MinimizeCrashLoop(const Unit &U);
   void RereadOutputCorpus(size_t MaxSize);
 

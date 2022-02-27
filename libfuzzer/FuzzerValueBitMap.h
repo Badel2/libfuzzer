@@ -12,7 +12,10 @@
 #define LLVM_FUZZER_VALUE_BIT_MAP_H
 
 #include "FuzzerPlatform.h"
+#include "json.hpp"
 #include <cstdint>
+
+using json = nlohmann::json;
 
 namespace fuzzer {
 
@@ -62,6 +65,20 @@ struct ValueBitMap {
         for (size_t j = 0; j < sizeof(M) * 8; j++)
           if (M & ((uintptr_t)1 << j))
             CB(i * sizeof(M) * 8 + j);
+  }
+
+  void to_json(json& j) const {
+    j["Map"] = json::array();
+    for (size_t i = 0; i < kMapSizeInWords; i++) {
+        j["Map"].push_back(Map[i]);
+    }
+  }
+  void from_json(const json& j) {
+    json jm = j.at("Map");
+    assert(jm.size() == kMapSizeInWords);
+    for (size_t i = 0; i < kMapSizeInWords; i++) {
+        Map[i] = jm[i];
+    }
   }
 
  private:

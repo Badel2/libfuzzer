@@ -14,9 +14,12 @@
 #include "FuzzerDefs.h"
 #include "FuzzerDictionary.h"
 #include "FuzzerValueBitMap.h"
+#include "json.hpp"
 
 #include <set>
 #include <unordered_map>
+
+using json = nlohmann::json;
 
 namespace fuzzer {
 
@@ -43,6 +46,48 @@ struct TableOfRecentCompares {
   Pair Get(size_t I) { return Table[I % kSize]; }
 
   Pair Table[kSize];
+
+  void to_json(json& j) const {
+    j["Table"] = json::array();
+    for (size_t i = 0; i < kSize; i++) {
+      auto pair = Table[i];
+      json jPair = json::array();
+      // HACK: serialize using T.to_json if T is FixedWord<64>
+      // Because this struct is used with T=uint32_t, T=uint64_t, and T=Word
+      // Both uint32_t and uint64_t can be converted to JSON automatically, so they do not need
+      // the explicit conversion
+      if constexpr (std::is_same<T, FixedWord<64>>::value) {
+          json jA;
+          pair.A.to_json(jA);
+          jPair.push_back(jA);
+          json jB;
+          pair.B.to_json(jB);
+          jPair.push_back(jB);
+      } else {
+          jPair.push_back(pair.A);
+          jPair.push_back(pair.B);
+      }
+      j["Table"].push_back(jPair);
+    }
+  }
+  void from_json(const json& j) {
+    assert(j.at("Table").size() == kSize);
+    for (size_t i = 0; i < j.at("Table").size(); i++) {
+        auto pair = j.at("Table")[i];
+        assert(pair.size() == 2);
+        // Same hack as in to_json
+        if constexpr (std::is_same<T, FixedWord<64>>::value) {
+          Pair p;
+          p.A.from_json(pair[0]);
+          p.B.from_json(pair[1]);
+          Table[i] = p;
+        } else {
+          T A = pair[0];
+          T B = pair[1];
+          Table[i] = Pair { A, B };
+        }
+    }
+  }
 };
 
 template <size_t kSizeT>
@@ -64,6 +109,24 @@ struct MemMemTable {
     }
     EmptyWord.Set(nullptr, 0);
     return EmptyWord;
+  }
+
+  void to_json(json& j) const {
+    j["MemMemWords"] = json::array();
+    for (size_t i = 0; i < kSize; i++) {
+      auto w = MemMemWords[i];
+      json jW;
+      w.to_json(jW);
+      j["MemMemWords"].push_back(jW);
+    }
+    // Do not serialize EmptyWord, it is just an empty word
+  }
+  void from_json(const json& j) {
+    assert(j.at("MemMemWords").size() == kSize);
+    for (size_t i = 0; i < kSize; i++) {
+      MemMemWords[i].from_json(j.at("MemMemWords")[i]);
+    }
+    EmptyWord.Set(nullptr, 0);
   }
 };
 
@@ -121,13 +184,162 @@ class TracePC {
 
   struct PCTableEntry {
     uintptr_t PC, PCFlags;
+
+    void to_json(json& j) const {
+        j["PC"] = PC;
+        j["PCFlags"] = PCFlags;
+    }
+    void from_json(const json& j) {
+        j.at("PC").get_to(PC);
+        j.at("PCFlags").get_to(PCFlags);
+    }
   };
 
-  uintptr_t PCTableEntryIdx(const PCTableEntry *TE);
+  uintptr_t PCTableEntryIdx(const PCTableEntry *TE) const;
   const PCTableEntry *PCTableEntryByIdx(uintptr_t Idx);
   static uintptr_t GetNextInstructionPc(uintptr_t PC);
   bool PcIsFuncEntry(const PCTableEntry *TE) { return TE->PCFlags & 1; }
 
+  void to_json(json& j) const {
+/*
+  TableOfRecentCompares<uint32_t, 32> TORC4;
+  TableOfRecentCompares<uint64_t, 32> TORC8;
+  TableOfRecentCompares<Word, 32> TORCW;
+  MemMemTable<1024> MMT;
+*/
+    json jTORC4;
+    TORC4.to_json(jTORC4);
+    j["TORC4"] = jTORC4;
+    json jTORC8;
+    TORC8.to_json(jTORC8);
+    j["TORC8"] = jTORC8;
+    json jTORCW;
+    TORCW.to_json(jTORCW);
+    j["TORCW"] = jTORCW;
+    json jMMT;
+    MMT.to_json(jMMT);
+    j["MMT"] = jMMT;
+
+/*
+  bool UseCounters = false;
+  uint32_t UseValueProfileMask = false;
+  bool DoPrintNewPCs = false;
+  size_t NumPrintNewFuncs = 0;
+*/
+    j["UseCounters"] = UseCounters;
+    j["UseValueProfileMask"] = UseValueProfileMask;
+    j["DoPrintNewPCs"] = DoPrintNewPCs;
+    j["NumPrintNewFuncs"] = NumPrintNewFuncs;
+
+/*
+  Module Modules[4096];
+  size_t NumModules;  // linker-initialized.
+  size_t NumInline8bitCounters;
+*/
+    // NumModules is simply the len of Modules, so it is not serialized
+    j["Modules"] = json::array();
+    for (size_t i = 0; i < NumModules; i++) {
+      json jM;
+      Modules[i].to_json(jM);
+      j["Modules"].push_back(jM);
+    }
+    j["NumInline8bitCounters"] = NumInline8bitCounters;
+
+/*
+  struct { const PCTableEntry *Start, *Stop; } ModulePCTable[4096];
+  size_t NumPCTables;
+  size_t NumPCsInPCTables;
+*/
+    // NumPCTables is simply the len of ModulePCTable, so it is not serialized
+    j["ModulePCTable"] = json::array();
+    for (size_t i = 0; i < NumPCTables; i++) {
+      json jM = json::array();
+      for (auto it = ModulePCTable[i].Start; it < ModulePCTable[i].Stop; it++) {
+        json j2;
+        it->to_json(j2);
+        jM.push_back(j2);
+      }
+      j["ModulePCTable"].push_back(jM);
+    }
+    j["NumPCsInPCTables"] = NumPCsInPCTables;
+
+/*
+  Set<const PCTableEntry*> ObservedPCs;
+  std::unordered_map<uintptr_t, uintptr_t> ObservedFuncs;  // PC => Counter.
+*/
+    // TODO: who owns PCTableEntry?
+    // If ObservedPCs must not own it, then we cannot simply deserialize ObservedPCs, it must point
+    // to PCTableEntry that were allocated somewhere else
+    //j["ObservedPCs"] = ObservedPCs;
+    // Skipping serialization, to deserialize call:
+    //UpdateObservedPCs();
+    // Actually, we can convert PCTableEntry* into uintptr_t, so let's do that
+    Set<uintptr_t> ObservedPCsAsIndexes {};
+    for (auto opc : ObservedPCs) {
+        ObservedPCsAsIndexes.insert(PCTableEntryIdx(opc));
+    }
+    j["ObservedPCs"] = ObservedPCsAsIndexes;
+    j["ObservedFuncs"] = ObservedFuncs;
+
+/*
+  uint8_t *FocusFunctionCounterPtr = nullptr;
+*/
+
+    // TODO: to deserialize FocusFunctionCounterPtr simply make sure that
+    // TPC.SetFocusFunction(FocusFunctionOrAuto);
+    // is called
+
+/*
+  ValueBitMap ValueProfileMap;
+  uintptr_t InitialStack;
+*/
+    json jValueProfileMap;
+    ValueProfileMap.to_json(jValueProfileMap);
+    j["ValueProfileMap"] = jValueProfileMap;
+    // InitialStack probably does not need to be serialized, because it will be
+    // reset by TPC.RecordInitialStack anyway.
+    // But it can be a good check, if this value changed then the reset of the data may also be
+    // wrong.
+    //j["InitialStack"] = InitialStack;
+  }
+
+  void from_json(const json& j) {
+    TORC4.from_json(j.at("TORC4"));
+    TORC8.from_json(j.at("TORC8"));
+    TORCW.from_json(j.at("TORCW"));
+    MMT.from_json(j.at("MMT"));
+
+    j.at("UseCounters").get_to(UseCounters);
+    j.at("UseValueProfileMask").get_to(UseValueProfileMask);
+    j.at("DoPrintNewPCs").get_to(DoPrintNewPCs);
+    j.at("NumPrintNewFuncs").get_to(NumPrintNewFuncs);
+
+    // Modules must be exactly the same as in the JSON file
+    assert(j.at("Modules").size() == NumModules);
+    for (size_t i = 0; i < NumModules; i++) {
+      json jM = j.at("Modules")[i];
+      Modules[i].from_json(jM);
+    }
+    j.at("NumInline8bitCounters").get_to(NumInline8bitCounters);
+
+    // ModulePCTable must be exactly the same as in the JSON file
+    assert(j.at("ModulePCTable").size() == NumPCTables);
+    for (size_t i = 0; i < NumPCTables; i++) {
+      json jM = j.at("ModulePCTable")[i];
+      Modules[i].from_json(jM);
+    }
+
+    Set<uintptr_t> ObservedPCsAsIndexes {};
+    j.at("ObservedPCs").get_to(ObservedPCsAsIndexes);
+    for (auto opi : ObservedPCsAsIndexes) {
+        ObservedPCs.insert(PCTableEntryByIdx(opi));
+    }
+    j.at("ObservedFuncs").get_to(ObservedFuncs);
+
+    j.at("NumPCsInPCTables").get_to(NumPCsInPCTables);
+
+    ValueProfileMap.from_json(j.at("ValueProfileMap"));
+  }
 private:
   bool UseCounters = false;
   uint32_t UseValueProfileMask = false;
@@ -142,6 +354,24 @@ private:
       uint8_t *Start, *Stop;
       bool Enabled;
       bool OneFullPage;
+
+/*
+      void to_json(json& j) const {
+        j["StartStop"] = json::array();
+        for (auto it = Start; it < Stop; it++) {
+            j["StartStop"].push_back(*it);
+        }
+        j["Enabled"] = Enabled;
+        j["OneFullPage"] = OneFullPage;
+      }
+      void from_json(const json& j) {
+        // TODO: who does own the region? Who will free the memory?
+        // Assuming that Region is already initialized...
+        assert(Stop - Start == j.at("StartStop").size());
+        j.at("Enabled").get_to(Enabled);
+        j.at("OneFullPage").get_to(OneFullPage);
+      }
+*/
     };
     Region *Regions;
     size_t NumRegions;
@@ -151,6 +381,33 @@ private:
     size_t  Idx(uint8_t *P) {
       assert(P >= Start() && P < Stop());
       return P - Start();
+    }
+    void to_json(json& j) const {
+        // Serialize Module as a single array, flattening all the Regions
+        //Printf("serialize Module to JSON. size: %d:\n", Regions[NumRegions - 1].Stop - Regions[0].Start);
+        j = json::array();
+        for (uint8_t *x = Regions[0].Start; x < Regions[NumRegions - 1].Stop; x++) {
+            j.push_back(*x);
+        }
+    }
+    void from_json(const json& j) {
+        size_t newSize = j.size();
+        // The size must be exactly the same because I don't know how to
+        // reallocate this data structure
+        //Printf("loading Module from JSON. old module size: %d, new module size: %d:\n", Size(), newSize);
+        assert(newSize == Size());
+        /*
+        Printf("loading Module from JSON. old module:\n");
+        json old;
+        to_json(old);
+        Printf("%s\n", old.dump().c_str());
+        */
+        // TODO: who does own the region? Who will free the memory?
+        // Assuming that Region is already initialized...
+        for (size_t i = 0; i < Size(); i++) {
+            Start()[i] = j[i];
+        }
+        // TODO: assuming that Enabled and OneFullPage are already initialized
     }
   };
 

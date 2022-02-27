@@ -15,11 +15,14 @@
 #include "FuzzerPlatform.h"
 #include "FuzzerRandom.h"
 #include "FuzzerTracePC.h"
+#include "json.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <memory>
 #include <mutex>
 #include <set>
+#include <thread>
 
 #if defined(__has_include)
 #if __has_include(<sanitizer / lsan_interface.h>)
@@ -34,6 +37,8 @@
 #define NO_SANITIZE_MEMORY __attribute__((no_sanitize_memory))
 #endif
 #endif
+
+using json = nlohmann::json;
 
 namespace fuzzer {
 static const size_t kMaxUnitSizeToPrint = 256;
@@ -506,6 +511,10 @@ static void WriteEdgeToMutationGraphFile(const std::string &MutationGraphFile,
 bool Fuzzer::RunOne(const uint8_t *Data, size_t Size, bool MayDeleteFile,
                     InputInfo *II, bool ForceAddToCorpus,
                     bool *FoundUniqFeatures) {
+    // When used from ReadAndExecuteSeedCorpora, these are the arguments:
+    // MayDeleteFile = false
+    // II = nullptr
+    // FoundUniqFeatures = nullptr
   if (!Size)
     return false;
   // Largest input length should be INT_MAX.
@@ -785,52 +794,112 @@ void Fuzzer::PurgeAllocator() {
   LastAllocatorPurgeAttemptTime = system_clock::now();
 }
 
-void Fuzzer::ReadAndExecuteSeedCorpora(std::vector<SizedFile> &CorporaFiles) {
+void Fuzzer::ReadAndExecuteSeedCorpora(Vector<SizedFile> &CorporaFiles, std::string InitedCorpusJsonPath, bool writeCorpusJson) {
   const size_t kMaxSaneLen = 1 << 20;
   const size_t kMinDefaultLen = 4096;
-  size_t MaxSize = 0;
-  size_t MinSize = -1;
-  size_t TotalSize = 0;
-  for (auto &File : CorporaFiles) {
-    MaxSize = Max(File.Size, MaxSize);
-    MinSize = Min(File.Size, MinSize);
-    TotalSize += File.Size;
-  }
-  if (Options.MaxLen == 0)
-    SetMaxInputLen(std::min(std::max(kMinDefaultLen, MaxSize), kMaxSaneLen));
-  assert(MaxInputLen > 0);
 
-  // Test the callback with empty input and never try it again.
-  uint8_t dummy = 0;
-  ExecuteCallback(&dummy, 0);
+  if (!InitedCorpusJsonPath.empty()) {
+    Printf("INFO: Loading initiliazed corpus from JSON file\n");
+    std::string js;
+    while (true) {
+      js = FileToString(InitedCorpusJsonPath);
+      if (js.empty()) {
+        // Corpus file not ready yet, wait a few seconds and try again
+        Printf("INFO: Corpus JSON file does not exist yet, waiting for it to be created...\n");
+        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+      } else {
+        break;
+      }
+    }
+    auto j = json::parse(js);
 
-  if (CorporaFiles.empty()) {
-    Printf("INFO: A corpus is not provided, starting from an empty corpus\n");
+    size_t maxInputLen = j.at("MaxInputLen");
+    if (Options.MaxLen == 0)
+      SetMaxInputLen(std::min(std::max(kMinDefaultLen, maxInputLen), kMaxSaneLen));
+    assert(MaxInputLen > 0);
+
+    // Test the callback with empty input and never try it again.
+    uint8_t dummy = 0;
+    ExecuteCallback(&dummy, 0);
+
+    Corpus.from_json(j.at("Corpus"));
+    TPC.from_json(j.at("TPC"));
+    j.at("TotalNumberOfRuns").get_to(TotalNumberOfRuns);
+
+    // Call RunOne once, just in case there is something that needs initialization
     Unit U({'\n'}); // Valid ASCII input.
     RunOne(U.data(), U.size());
   } else {
-    Printf("INFO: seed corpus: files: %zd min: %zdb max: %zdb total: %zdb"
-           " rss: %zdMb\n",
-           CorporaFiles.size(), MinSize, MaxSize, TotalSize, GetPeakRSSMb());
-    if (Options.ShuffleAtStartUp)
-      std::shuffle(CorporaFiles.begin(), CorporaFiles.end(), MD.GetRand());
+      size_t MaxSize = 0;
+      size_t MinSize = -1;
+      size_t TotalSize = 0;
+      for (auto &File : CorporaFiles) {
+        MaxSize = Max(File.Size, MaxSize);
+        MinSize = Min(File.Size, MinSize);
+        TotalSize += File.Size;
+      }
+      if (Options.MaxLen == 0)
+        SetMaxInputLen(std::min(std::max(kMinDefaultLen, MaxSize), kMaxSaneLen));
+      assert(MaxInputLen > 0);
 
-    if (Options.PreferSmall) {
-      std::stable_sort(CorporaFiles.begin(), CorporaFiles.end());
-      assert(CorporaFiles.front().Size <= CorporaFiles.back().Size);
-    }
+      // Test the callback with empty input and never try it again.
+      uint8_t dummy = 0;
+      ExecuteCallback(&dummy, 0);
 
-    // Load and execute inputs one by one.
-    for (auto &SF : CorporaFiles) {
-      auto U = FileToVector(SF.File, MaxInputLen, /*ExitOnError=*/false);
-      assert(U.size() <= MaxInputLen);
-      RunOne(U.data(), U.size(), /*MayDeleteFile*/ false, /*II*/ nullptr,
-             /*ForceAddToCorpus*/ Options.KeepSeed,
-             /*FoundUniqFeatures*/ nullptr);
-      CheckExitOnSrcPosOrItem();
-      TryDetectingAMemoryLeak(U.data(), U.size(),
-                              /*DuringInitialCorpusExecution*/ true);
-    }
+      if (CorporaFiles.empty()) {
+        Printf("INFO: A corpus is not provided, starting from an empty corpus\n");
+        Unit U({'\n'}); // Valid ASCII input.
+        RunOne(U.data(), U.size());
+      } else {
+        Printf("INFO: seed corpus: files: %zd min: %zdb max: %zdb total: %zdb"
+               " rss: %zdMb\n",
+               CorporaFiles.size(), MinSize, MaxSize, TotalSize, GetPeakRSSMb());
+        if (Options.ShuffleAtStartUp)
+          std::shuffle(CorporaFiles.begin(), CorporaFiles.end(), MD.GetRand());
+
+        if (Options.PreferSmall) {
+          std::stable_sort(CorporaFiles.begin(), CorporaFiles.end());
+          assert(CorporaFiles.front().Size <= CorporaFiles.back().Size);
+        }
+
+        // Load and execute inputs one by one.
+        for (auto &SF : CorporaFiles) {
+          auto U = FileToVector(SF.File, MaxInputLen, /*ExitOnError=*/false);
+          assert(U.size() <= MaxInputLen);
+          RunOne(U.data(), U.size(), /*MayDeleteFile*/ false, /*II*/ nullptr,
+                 /*ForceAddToCorpus*/ Options.KeepSeed,
+                 /*FoundUniqFeatures*/ nullptr);
+          CheckExitOnSrcPosOrItem();
+          TryDetectingAMemoryLeak(U.data(), U.size(),
+                                  /*DuringInitialCorpusExecution*/ true);
+        }
+      }
+
+      if (writeCorpusJson) {
+          // Save Corpus and TPC to file
+          json j;
+          json jCorpus;
+          Corpus.to_json(jCorpus);
+          j["Corpus"] = jCorpus;
+          json jTPC;
+          TPC.to_json(jTPC);
+          j["TPC"] = jTPC;
+/*
+          json jCorporaFiles = json::array();
+          for (auto &SF : CorporaFiles) {
+            json jSF;
+            SF.to_json(jSF);
+            jCorporaFiles.push_back(jSF);
+          }
+          j["CorporaFiles"] = jCorporaFiles;
+*/
+          j["TotalNumberOfRuns"] = TotalNumberOfRuns;
+          j["MaxInputLen"] = MaxInputLen;
+
+          // TODO: save some metadata such as current executable hash, to know when the corpus is valid
+          // TODO: this write must be atomic: it must be impossible for another process to access a partially written file
+          WriteToFile(j.dump(), InitedCorpusJsonPath);
+      }
   }
 
   PrintStats("INITED");
@@ -857,12 +926,18 @@ void Fuzzer::ReadAndExecuteSeedCorpora(std::vector<SizedFile> &CorporaFiles) {
   }
 }
 
-void Fuzzer::Loop(std::vector<SizedFile> &CorporaFiles) {
+void Fuzzer::Loop(Vector<SizedFile> &CorporaFiles, std::string InitedCorpusJsonPath, bool writeCorpusJson) {
+  // TODO: probably it would be better to read CorporaFiles from the JSON file
   auto FocusFunctionOrAuto = Options.FocusFunction;
   DFT.Init(Options.DataFlowTrace, &FocusFunctionOrAuto, CorporaFiles,
            MD.GetRand());
   TPC.SetFocusFunction(FocusFunctionOrAuto);
-  ReadAndExecuteSeedCorpora(CorporaFiles);
+/*
+  std::string InitedCorpusJsonPath ("corpus3.json");
+  //std::string InitedCorpusJsonPath ("");
+  bool writeCorpusJson = true;
+*/
+  ReadAndExecuteSeedCorpora(CorporaFiles, InitedCorpusJsonPath, writeCorpusJson);
   DFT.Clear();  // No need for DFT any more.
   TPC.SetPrintNewPCs(Options.PrintNewCovPcs);
   TPC.SetPrintNewFuncs(Options.PrintNewCovFuncs);

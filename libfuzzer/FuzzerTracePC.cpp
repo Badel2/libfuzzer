@@ -199,7 +199,7 @@ void TracePC::UpdateObservedPCs() {
   }
 }
 
-uintptr_t TracePC::PCTableEntryIdx(const PCTableEntry *TE) {
+uintptr_t TracePC::PCTableEntryIdx(const PCTableEntry *TE) const {
   size_t TotalTEs = 0;
   for (size_t i = 0; i < NumPCTables; i++) {
     auto &M = ModulePCTable[i];
