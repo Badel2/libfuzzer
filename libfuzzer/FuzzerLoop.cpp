@@ -816,6 +816,16 @@ void Fuzzer::ReadAndExecuteSeedCorpora(FuzzInitCorpusMode InitMode) {
     }
     auto j = json::parse(js);
 
+    auto ExeHash = ExecutableFileHash();
+    std::string JsonExeHash = j.at("ExeHash");
+    if (ExeHash != JsonExeHash) {
+      Printf("ERROR: provided corpus JSON file is not compatible with this executable. Corpus JSON files are invalidated when the program is recompiled. Delete the existing file and create a new corpus JSON file.\n");
+      Printf("CorpusJsonPath: %s\n", InitedCorpusJsonPath.c_str());
+      Printf("CorpusJsonPath.ExeHash: %s\n", JsonExeHash.c_str());
+      Printf("Local ExeHash:          %s\n", ExeHash.c_str());
+      exit(1);
+    }
+
     size_t maxInputLen = j.at("MaxInputLen");
     if (Options.MaxLen == 0)
       SetMaxInputLen(std::min(std::max(kMinDefaultLen, maxInputLen), kMaxSaneLen));
@@ -938,7 +948,9 @@ void Fuzzer::Serialize(std::string Path) {
   j["MaxInputLen"] = MaxInputLen;
   j["EpochOfLastReadOfOutputCorpus"] = EpochOfLastReadOfOutputCorpus;
 
-  // TODO: save some metadata such as current executable hash, to know when the corpus is valid
+  // Save some metadata such as current executable hash, to know when the corpus is valid
+  auto ExeHash = ExecutableFileHash();
+  j["ExeHash"] = ExeHash;
   // TODO: this write must be atomic: it must be impossible for another process to access a partially written file
   WriteToFile(j.dump(), Path);
 }

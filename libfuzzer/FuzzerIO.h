@@ -95,6 +95,7 @@ char GetSeparator();
 bool IsSeparator(char C);
 // Similar to the basename utility: returns the file name w/o the dir prefix.
 std::string Basename(const std::string &Path);
+std::string ExecutableFileHash();
 
 FILE* OpenFile(int Fd, const char *Mode);
 

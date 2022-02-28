@@ -12,6 +12,7 @@
 
 #include "FuzzerExtFunctions.h"
 #include "FuzzerIO.h"
+#include "FuzzerSHA1.h"
 #include <cstdarg>
 #include <cstdio>
 #include <dirent.h>
@@ -172,6 +173,12 @@ void RmDir(const std::string &Path) {
 const std::string &getDevNull() {
   static const std::string devNull = "/dev/null";
   return devNull;
+}
+
+std::string ExecutableFileHash() {
+  auto ExeBytes = FileToVector("/proc/self/exe", 0, true);
+  auto ExeHash = Hash(ExeBytes);
+  return ExeHash;
 }
 
 }  // namespace fuzzer
