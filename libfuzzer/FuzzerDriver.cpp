@@ -291,7 +291,8 @@ static int RunInMultipleProcesses(const Vector<std::string> &Args,
                                   unsigned NumWorkers, unsigned NumJobs, std::string WaitForCorpusFile) {
   std::atomic<unsigned> Counter(0);
   std::atomic<bool> HasErrors(false);
-  std::string CorpusFile("corpus.json");
+  std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(system_clock::now().time_since_epoch());
+  std::string CorpusFile = "corpus-" + std::to_string(ms.count()) + ".json";
   if (!WaitForCorpusFile.empty()) {
     CorpusFile = WaitForCorpusFile;
   }
