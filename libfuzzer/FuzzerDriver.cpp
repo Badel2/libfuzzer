@@ -946,17 +946,17 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
     exit(0);
   }
 
-  if (Flags.wait_for_corpus_file && Flags.write_corpus_file) {
-      if (Flags.wait_for_corpus_file != Flags.write_corpus_file) {
-          Printf("Error: corpus file must be the same for wait_for_corpus_file and write_corpus_file arguments\n");
-          return 1;
-      }
-  }
   std::string InitedCorpusJsonPath ("");
   if (Flags.wait_for_corpus_file) {
     InitedCorpusJsonPath = Flags.wait_for_corpus_file;
   }
   if (Flags.write_corpus_file) {
+    if (Flags.wait_for_corpus_file && Flags.write_corpus_file) {
+        if (InitedCorpusJsonPath != Flags.write_corpus_file) {
+            Printf("Error: corpus file must be the same for wait_for_corpus_file and write_corpus_file arguments\n");
+            return 1;
+        }
+    }
     InitedCorpusJsonPath = Flags.write_corpus_file;
   }
 

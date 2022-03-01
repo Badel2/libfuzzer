@@ -957,7 +957,6 @@ void Fuzzer::Serialize(std::string Path) {
 
 void Fuzzer::Loop(FuzzInitCorpusMode InitMode) {
   Vector<SizedFile> &CorporaFiles = InitMode.CorporaFiles;
-  std::string InitedCorpusJsonPath = InitMode.CorpusJsonPath;
   // TODO: probably it would be better to read CorporaFiles from the JSON file
   auto FocusFunctionOrAuto = Options.FocusFunction;
   DFT.Init(Options.DataFlowTrace, &FocusFunctionOrAuto, CorporaFiles,
