@@ -287,7 +287,7 @@ std::string CloneArgsWithoutX(const std::vector<std::string> &Args,
   return Cmd;
 }
 
-static int RunInMultipleProcesses(const Vector<std::string> &Args,
+static int RunInMultipleProcesses(const std::vector<std::string> &Args,
                                   unsigned NumWorkers, unsigned NumJobs, std::string WaitForCorpusFile) {
   std::atomic<unsigned> Counter(0);
   std::atomic<bool> HasErrors(false);
@@ -299,7 +299,7 @@ static int RunInMultipleProcesses(const Vector<std::string> &Args,
   Command Cmd(Args);
   Cmd.removeFlag("jobs");
   Cmd.removeFlag("workers");
-  Vector<std::thread> V;
+  std::vector<std::thread> V;
   std::thread Pulse(PulseThread);
   Pulse.detach();
   Command Cmd1(Cmd);

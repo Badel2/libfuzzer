@@ -162,13 +162,13 @@ struct InputInfo {
   bool MayDeleteFile = false;
   bool Reduced = false;
   bool HasFocusFunction = false;
-  Vector<uint32_t> UniqFeatureSet;
-  Vector<uint8_t> DataFlowTraceForFocusFunction;
+  std::vector<uint32_t> UniqFeatureSet;
+  std::vector<uint8_t> DataFlowTraceForFocusFunction;
   // Power schedule.
   bool NeedsEnergyUpdate = false;
   double Energy = 0.0;
   double SumIncidence = 0.0;
-  Vector<std::pair<uint32_t, uint16_t>> FeatureFreqs;
+  std::vector<std::pair<uint32_t, uint16_t>> FeatureFreqs;
 */
     j["U"] = U;
     j["TimeOfUnit"] = TimeOfUnit.count();
@@ -566,11 +566,11 @@ public:
 
   std::piecewise_constant_distribution<double> CorpusDistribution;
 
-  Vector<double> Intervals;
-  Vector<double> Weights;
+  std::vector<double> Intervals;
+  std::vector<double> Weights;
 
   std::unordered_set<std::string> Hashes;
-  Vector<InputInfo*> Inputs;
+  std::vector<InputInfo *> Inputs;
 
   size_t NumAddedFeatures = 0;
   size_t NumUpdatedFeatures = 0;
@@ -580,7 +580,7 @@ public:
   bool DistributionNeedsUpdate = true;
   uint16_t FreqOfMostAbundantRareFeature = 0;
   uint16_t GlobalFeatureFreqs[kFeatureSetSize] = {};
-  Vector<uint32_t> RareFeatures;
+  std::vector<uint32_t> RareFeatures;
 
   std::string OutputCorpus;
 */

@@ -37,7 +37,7 @@ struct FuzzInitCorpusMode {
   bool ReadCorpusJson;
   bool WriteCorpusJson;
   std::string CorpusJsonPath;
-  Vector<SizedFile> CorporaFiles;
+  std::vector<SizedFile> CorporaFiles;
 };
 
 class Fuzzer {

@@ -798,7 +798,7 @@ void Fuzzer::ReadAndExecuteSeedCorpora(FuzzInitCorpusMode InitMode) {
   const size_t kMaxSaneLen = 1 << 20;
   const size_t kMinDefaultLen = 4096;
 
-  Vector<SizedFile> CorporaFiles = InitMode.CorporaFiles;
+  std::vector<SizedFile> CorporaFiles = InitMode.CorporaFiles;
   std::string InitedCorpusJsonPath = InitMode.CorpusJsonPath;
 
   if (InitMode.ReadCorpusJson && !InitedCorpusJsonPath.empty()) {
@@ -956,7 +956,7 @@ void Fuzzer::Serialize(std::string Path) {
 }
 
 void Fuzzer::Loop(FuzzInitCorpusMode InitMode) {
-  Vector<SizedFile> &CorporaFiles = InitMode.CorporaFiles;
+  std::vector<SizedFile> &CorporaFiles = InitMode.CorporaFiles;
   // TODO: probably it would be better to read CorporaFiles from the JSON file
   auto FocusFunctionOrAuto = Options.FocusFunction;
   DFT.Init(Options.DataFlowTrace, &FocusFunctionOrAuto, CorporaFiles,
