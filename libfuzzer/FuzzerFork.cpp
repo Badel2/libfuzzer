@@ -450,8 +450,8 @@ void FuzzWithFork(Random &Rand, const FuzzingOptions &Options,
             Printf("%s\n", Line.c_str());
       } else {
         // And exit if we don't ignore this crash.
-        Printf("INFO: log from the inner process:\n%s",
-               FileToString(Job->LogPath).c_str());
+        Printf("INFO: log from the inner process:\n");
+        fuzzer::CopyFileToErr(Job->LogPath);
         StopJobs();
         break;
       }
