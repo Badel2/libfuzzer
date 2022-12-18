@@ -65,7 +65,13 @@ std::string FileToString(const std::string &Path) {
 }
 
 void CopyFileToErr(const std::string &Path) {
-  Printf("%s", FileToString(Path).c_str());
+  std::ifstream T(Path, std::ios::binary);
+  std::vector<char> buffer(4096);
+  while (T.read(buffer.data(), buffer.size())) {
+    Printf("%.*s", buffer.size(), buffer.data());
+  }
+  // write the remaining bytes
+  Printf("%.*s", T.gcount(), buffer.data());
 }
 
 void WriteToFile(const Unit &U, const std::string &Path) {
