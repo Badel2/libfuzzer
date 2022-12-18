@@ -264,7 +264,7 @@ class TracePC {
     j["NumPCsInPCTables"] = NumPCsInPCTables;
 
 /*
-  Set<const PCTableEntry*> ObservedPCs;
+  std::set<const PCTableEntry *> ObservedPCs;
   std::unordered_map<uintptr_t, uintptr_t> ObservedFuncs;  // PC => Counter.
 */
     // TODO: who owns PCTableEntry?
@@ -274,7 +274,7 @@ class TracePC {
     // Skipping serialization, to deserialize call:
     //UpdateObservedPCs();
     // Actually, we can convert PCTableEntry* into uintptr_t, so let's do that
-    Set<uintptr_t> ObservedPCsAsIndexes {};
+    std::set<uintptr_t> ObservedPCsAsIndexes {};
     for (auto opc : ObservedPCs) {
         ObservedPCsAsIndexes.insert(PCTableEntryIdx(opc));
     }
@@ -338,7 +338,7 @@ class TracePC {
       }
     }
 
-    Set<uintptr_t> ObservedPCsAsIndexes {};
+    std::set<uintptr_t> ObservedPCsAsIndexes {};
     j.at("ObservedPCs").get_to(ObservedPCsAsIndexes);
     for (auto opi : ObservedPCsAsIndexes) {
         ObservedPCs.insert(PCTableEntryByIdx(opi));
