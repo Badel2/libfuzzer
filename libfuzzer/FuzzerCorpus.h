@@ -26,6 +26,9 @@
 
 using json = nlohmann::json;
 
+static void piecewise_constant_distribution_to_json(const std::piecewise_constant_distribution<double>& dist, json& j);
+static std::piecewise_constant_distribution<double> piecewise_constant_distribution_from_json(const json& j);
+
 namespace fuzzer {
 
 struct InputInfo {
@@ -590,9 +593,9 @@ public:
     Entropic.to_json(jEntropic);
     j["Entropic"] = jEntropic;
 
-    // Skipping serialization of CorpusDistribution
-    // To deserialize, set DistributionNeedsUpdate=true and call
-    // UpdateCorpusDistribution
+    json jCorpusDistribution;
+    piecewise_constant_distribution_to_json(CorpusDistribution, jCorpusDistribution);
+    j["CorpusDistribution"] = jCorpusDistribution;
 
     j["Intervals"] = Intervals;
     j["Weights"] = Weights;
@@ -634,6 +637,8 @@ public:
     ent.from_json(j.at("Entropic"));
     Entropic = ent;
 
+    CorpusDistribution = piecewise_constant_distribution_from_json(j.at("CorpusDistribution"));
+
     j.at("Intervals").get_to(Intervals);
     j.at("Weights").get_to(Weights);
 
@@ -656,10 +661,6 @@ public:
     j.at("RareFeatures").get_to(RareFeatures);
 
     j.at("OutputCorpus").get_to(OutputCorpus);
-
-    // Hopefully force initialization of CorpusDistribution,
-    // which is currently uninitialized
-    DistributionNeedsUpdate = true;
   }
 
 private:
@@ -781,5 +782,25 @@ private:
 };
 
 }  // namespace fuzzer
+
+static void piecewise_constant_distribution_to_json(const std::piecewise_constant_distribution<double>& dist, json& j) {
+    // Add the weights of the distribution as an array
+    j["densities"] = dist.densities();
+    j["intervals"] = dist.intervals();
+}
+
+static std::piecewise_constant_distribution<double> piecewise_constant_distribution_from_json(const json& j) {
+    std::vector<double> densities;
+    std::vector<double> intervals;
+
+    for (auto it = j.at("densities").begin(); it < j.at("densities").end(); it++) {
+        densities.push_back(*it);
+    }
+    for (auto it = j.at("intervals").begin(); it < j.at("intervals").end(); it++) {
+        intervals.push_back(*it);
+    }
+
+    return std::piecewise_constant_distribution<double>(intervals.begin(), intervals.end(), densities.begin());
+}
 
 #endif  // LLVM_FUZZER_CORPUS
