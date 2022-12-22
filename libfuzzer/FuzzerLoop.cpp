@@ -951,8 +951,11 @@ void Fuzzer::Serialize(std::string Path) {
   // Save some metadata such as current executable hash, to know when the corpus is valid
   auto ExeHash = ExecutableFileHash();
   j["ExeHash"] = ExeHash;
-  // TODO: this write must be atomic: it must be impossible for another process to access a partially written file
-  WriteToFile(j.dump(), Path);
+  // This write must be atomic: it must be impossible for another process to access a partially written file.
+  // So write to a tmp file, and then rename that file.
+  std::string TmpPath = Path + ".tmp";
+  WriteToFile(j.dump(), TmpPath);
+  RenameFile(TmpPath, Path);
 }
 
 void Fuzzer::Loop(FuzzInitCorpusMode InitMode) {
