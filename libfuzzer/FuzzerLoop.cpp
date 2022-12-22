@@ -982,7 +982,7 @@ void Fuzzer::Loop(FuzzInitCorpusMode InitMode) {
   while (true) {
     auto Now = system_clock::now();
     if (!Options.StopFile.empty() &&
-        !FileToVector(Options.StopFile, 1, false).empty())
+        FileSize(Options.StopFile) != 0)
       break;
     if (duration_cast<seconds>(Now - LastCorpusReload).count() >=
         Options.ReloadIntervalSec) {

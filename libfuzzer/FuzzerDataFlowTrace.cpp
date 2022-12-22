@@ -276,7 +276,7 @@ int CollectDataFlow(const std::string &DFTBinary, const std::string &DirPath,
   }
   // Write functions.txt if it's currently empty or doesn't exist.
   auto FunctionsTxtPath = DirPlusFile(DirPath, kFunctionsTxt);
-  if (FileToVector(FunctionsTxtPath, 1, false).empty()) {
+  if (FileSize(FunctionsTxtPath) == 0) {
     Command Cmd;
     Cmd.addArgument(DFTBinary);
     Cmd.setOutputFile(FunctionsTxtPath);
