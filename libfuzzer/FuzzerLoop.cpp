@@ -837,7 +837,7 @@ void Fuzzer::ReadAndExecuteSeedCorpora(FuzzInitCorpusMode InitMode) {
 
     Corpus.from_json(j.at("Corpus"));
     TPC.from_json(j.at("TPC"));
-    j.at("TotalNumberOfRuns").get_to(TotalNumberOfRuns);
+    //j.at("TotalNumberOfRuns").get_to(TotalNumberOfRuns);
     j.at("EpochOfLastReadOfOutputCorpus").get_to(EpochOfLastReadOfOutputCorpus);
 
     // Call RunOne once, just in case there is something that needs initialization
@@ -944,7 +944,7 @@ void Fuzzer::Serialize(std::string Path) {
   }
   j["CorporaFiles"] = jCorporaFiles;
 */
-  j["TotalNumberOfRuns"] = TotalNumberOfRuns;
+  //j["TotalNumberOfRuns"] = TotalNumberOfRuns;
   j["MaxInputLen"] = MaxInputLen;
   j["EpochOfLastReadOfOutputCorpus"] = EpochOfLastReadOfOutputCorpus;
 
